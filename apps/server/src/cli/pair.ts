@@ -29,6 +29,7 @@ import { Command, Flag, GlobalFlag } from "effect/cli";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
+import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ServerConfig from "../config.ts";
 import * as ManagedLimits from "../policy/managedLimits.ts";
 import * as ManagedPolicy from "../policy/ManagedPolicy.ts";
@@ -48,6 +49,9 @@ import {
 } from "../startupAccess.ts";
 import { authScopesFlag } from "./authScopes.ts";
 import { baseDirFlag, DurationFromString } from "./config.ts";
+
+// Secret store entry holding the most recently minted pairing token.
+const PAIRING_TOKEN_SECRET_NAME = "pairing-token";
 
 const WELL_KNOWN_ENVIRONMENT_PATH = "/.well-known/t3/environment";
 const PAIR_PROBE_TIMEOUT = Duration.millis(2_500);
@@ -431,12 +435,17 @@ const mintPairingLink = Effect.fn("pair.mintPairingLink")(function* (input: {
 }) {
   return yield* Effect.gen(function* () {
     const environmentAuth = yield* EnvironmentAuth.EnvironmentAuth;
-    return yield* environmentAuth.createPairingLink({
+    const secretStore = yield* ServerSecretStore.ServerSecretStore;
+    const issued = yield* environmentAuth.createPairingLink({
       scopes: input.scopes,
       subject: "one-time-token",
       label: Option.getOrElse(input.label, () => "t3 pair"),
       ...(Option.isSome(input.ttl) ? { ttl: input.ttl.value } : {}),
     });
+    // Keep the token in the server's secret store so it survives this process's
+    // stdout being lost. The pairing link stays single-use and TTL-bound.
+    yield* secretStore.set(PAIRING_TOKEN_SECRET_NAME, new TextEncoder().encode(issued.credential));
+    return issued;
   }).pipe(
     Effect.provide(
       EnvironmentAuth.layerRuntime.pipe(
