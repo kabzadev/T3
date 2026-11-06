@@ -8,7 +8,11 @@
     // nodeGypDependencies (default true) brings python3/make/g++, which Linux
     // needs for node-pty's node-gyp fallback (its prebuilds are mac/win only).
     "ghcr.io/devcontainers/features/node:2": {
-      "version": "26"
+      "version": "26",
+      // This network SNI-filters registry.npmjs.org, so the feature's default
+      // `npm install -g yarn` fails at image-build time. apt installs yarn from
+      // dl.yarnpkg.com instead, which is reachable, bypassing the npm registry.
+      "installYarnUsingApt": true
     },
     // native/resource-monitor (edition 2024, needs stable >= 1.85). The server
     // degrades gracefully without the binary, but CI checks cargo fmt + test.
@@ -23,7 +27,23 @@
   "containerEnv": {
     // Keep all runtime state inside the (gitignored) workspace .t3, matching
     // the worktree default. An explicit --home-dir still wins.
-    "T3CODE_HOME": "${containerWorkspaceFolder}/.t3"
+    "T3CODE_HOME": "${containerWorkspaceFolder}/.t3",
+    // This network SNI-filters registry.npmjs.org. Route all npm/pnpm traffic
+    // through the Verdaccio pull-through proxy on the Mac mini (reachable from
+    // containers over Tailscale). Three vars because each tool reads its own:
+    //   PNPM_CONFIG_REGISTRY  pnpm 12 (it ignores npm_config_registry)
+    //   npm_config_registry   plain npm/npx (and the node feature's npm)
+    //   COREPACK_NPM_REGISTRY Corepack's pnpm bootstrap (hardcodes npmjs else)
+    // Set any to "" to bypass the proxy and go direct.
+    "PNPM_CONFIG_REGISTRY": "http://100.67.158.78:4873",
+    "npm_config_registry": "http://100.67.158.78:4873",
+    "COREPACK_NPM_REGISTRY": "http://100.67.158.78:4873"
+  },
+  "remoteEnv": {
+    // Same proxy for any npm/pnpm run in terminals and lifecycle scripts.
+    "PNPM_CONFIG_REGISTRY": "http://100.67.158.78:4873",
+    "npm_config_registry": "http://100.67.158.78:4873",
+    "COREPACK_NPM_REGISTRY": "http://100.67.158.78:4873"
   },
   "mounts": [
     // vp keeps the pnpm content-addressable store and metadata cache under
