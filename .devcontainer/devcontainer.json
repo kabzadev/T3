@@ -3,7 +3,15 @@
 // Contributor doc: docs/internals/devcontainer.md
 {
   "name": "T3 Code",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  // Built from a Dockerfile (not a bare `image`) so a global npmrc can be
+  // seeded before features run. See .devcontainer/Dockerfile.
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      // Empty this to build against the default registry instead of the proxy.
+      "T3_NPM_REGISTRY": "http://100.67.158.78:4873"
+    }
+  },
   "features": {
     // nodeGypDependencies (default true) brings python3/make/g++, which Linux
     // needs for node-pty's node-gyp fallback (its prebuilds are mac/win only).
